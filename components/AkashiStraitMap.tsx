@@ -42,8 +42,7 @@ interface Particle {
   opacity: number;
   life: number;
   maxLife: number;
-  prevScreenX: number;
-  prevScreenY: number;
+  trail: { x: number; y: number }[];
 }
 
 interface Props {
@@ -129,8 +128,7 @@ export default function AkashiStraitMap({
       opacity: 0,
       life: stagger ? Math.random() * maxLife : 0,
       maxLife,
-      prevScreenX: -1,
-      prevScreenY: -1,
+      trail: [],
     };
   }, [speedFor]);
 
@@ -196,6 +194,8 @@ export default function AkashiStraitMap({
     const canvas = canvasRef.current;
     if (!map || !canvas) return;
 
+    const TRAIL_LEN = 8;
+
     const loop = () => {
       const ctx = canvas.getContext("2d");
       if (!ctx) { rafRef.current = requestAnimationFrame(loop); return; }
@@ -205,21 +205,20 @@ export default function AkashiStraitMap({
       const h = canvas.height / dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // Fade previous frame for trail effect
-      ctx.fillStyle = "rgba(0,0,0,0.06)";
-      ctx.fillRect(0, 0, w, h);
+      // Fully clear — no black accumulation
+      ctx.clearRect(0, 0, w, h);
 
       const dir = dirRef.current;
       const str = strRef.current;
       const particles = particlesRef.current;
       const slackMult = dir === "slack" ? 0.15 : 1;
 
-      // Color
-      const col = dir === "south"
-        ? "rgba(255,255,255,"
+      // Base color RGB
+      const rgb = dir === "south"
+        ? "255,255,255"
         : dir === "north"
-        ? "rgba(200,230,255,"
-        : "rgba(150,150,150,";
+        ? "200,230,255"
+        : "150,150,150";
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
@@ -228,7 +227,7 @@ export default function AkashiStraitMap({
         // Opacity fade in/out
         const fi = Math.min(p.life / 15, 1);
         const fo = Math.max(0, 1 - (p.life - p.maxLife + 15) / 15);
-        p.opacity = Math.min(fi, fo) * 0.8;
+        p.opacity = Math.min(fi, fo) * 0.85;
 
         if (p.life > p.maxLife || p.opacity <= 0) {
           particles[i] = spawnParticle(false);
@@ -238,40 +237,41 @@ export default function AkashiStraitMap({
         // Move in geo coordinates
         const angle = getFlowAngle(dir, p.lng);
         p.lng += Math.cos(angle) * p.speed * slackMult;
-        p.lat += Math.sin(angle) * p.speed * slackMult * 0.7; // lat degrees are ~1.2x lng at this latitude
+        p.lat += Math.sin(angle) * p.speed * slackMult * 0.7;
 
         if (!isWater(p.lng, p.lat)) {
           particles[i] = spawnParticle(false);
           continue;
         }
 
-        // Project to screen
+        // Project to screen and record trail
         const pt = map.latLngToContainerPoint([p.lat, p.lng]);
-        const sx = pt.x, sy = pt.y;
+        p.trail.push({ x: pt.x, y: pt.y });
+        if (p.trail.length > TRAIL_LEN) p.trail.shift();
 
-        // Draw trail from previous position
-        if (p.prevScreenX >= 0) {
-          const dx = sx - p.prevScreenX;
-          const dy = sy - p.prevScreenY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 0.5 && dist < 50) {
+        // Draw trail with fading opacity
+        if (p.trail.length > 1) {
+          for (let t = 1; t < p.trail.length; t++) {
+            const a = p.trail[t - 1];
+            const b = p.trail[t];
+            const tAlpha = (t / p.trail.length) * p.opacity * 0.6;
             ctx.beginPath();
-            ctx.moveTo(p.prevScreenX, p.prevScreenY);
-            ctx.lineTo(sx, sy);
-            ctx.strokeStyle = col + (p.opacity * 0.5) + ")";
-            ctx.lineWidth = 1.2 + (str === "strong" ? 0.5 : 0);
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.strokeStyle = `rgba(${rgb},${tAlpha})`;
+            ctx.lineWidth = 1.0 + (str === "strong" ? 0.6 : str === "medium" ? 0.3 : 0);
             ctx.stroke();
           }
         }
 
         // Head dot
-        ctx.beginPath();
-        ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
-        ctx.fillStyle = col + p.opacity + ")";
-        ctx.fill();
-
-        p.prevScreenX = sx;
-        p.prevScreenY = sy;
+        const head = p.trail[p.trail.length - 1];
+        if (head) {
+          ctx.beginPath();
+          ctx.arc(head.x, head.y, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${rgb},${p.opacity})`;
+          ctx.fill();
+        }
       }
 
       rafRef.current = requestAnimationFrame(loop);
