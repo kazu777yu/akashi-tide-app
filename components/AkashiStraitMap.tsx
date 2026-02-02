@@ -143,16 +143,21 @@ export default function AkashiStraitMap({
       attributionControl: true,
     });
 
-    // CartoDB Dark Matter — no API key required
+    // OpenStreetMap tiles (always free, no API key)
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
-        subdomains: "abcd",
         maxZoom: 19,
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }
     ).addTo(map);
+
+    // Apply CSS filter to map tiles pane for Windy-like terrain look
+    const tilesPane = map.getPane("tilePane");
+    if (tilesPane) {
+      tilesPane.style.filter = "saturate(0.4) brightness(0.55) contrast(1.1) hue-rotate(60deg)";
+    }
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
     mapRef.current = map;
