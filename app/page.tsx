@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { parseTideEvents, estimateCurrentFlow, TideEvent, CurrentFlow } from "@/lib/tide-utils";
-import AkashiStraitMap from "@/components/AkashiStraitMap";
+
+const AkashiStraitMap = dynamic(() => import("@/components/AkashiStraitMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[65vh] bg-slate-900">
+      <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  ),
+});
 
 function formatDate(date: Date) {
   return {
